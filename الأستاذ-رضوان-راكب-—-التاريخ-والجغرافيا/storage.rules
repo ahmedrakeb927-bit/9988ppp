@@ -1,0 +1,38 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Default deny all public/unauthenticated storage paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email_verified == true &&
+        (
+          request.auth.token.email == 'a.r.identity007@gmail.com' ||
+          request.auth.token.email == 'ucufdrf@gmail.com'
+        );
+    }
+
+    // Protected Educational Resources Storage Path
+    match /educational_resources/{resourceId}/{fileName} {
+      // Only the verified administrator can upload, replace, or delete educational files (max 25 MB)
+      allow write: if isVerifiedAdmin() &&
+        request.resource != null &&
+        request.resource.size > 0 &&
+        request.resource.size <= 25 * 1024 * 1024;
+
+      // Delete allowed for verified administrator
+      allow delete: if isVerifiedAdmin();
+
+      // Reads require an authenticated session; fine-grained group authorization is enforced via Firestore metadata & protected download handler
+      allow read: if isSignedIn();
+    }
+  }
+}

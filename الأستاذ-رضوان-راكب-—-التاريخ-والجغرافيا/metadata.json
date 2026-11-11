@@ -1,0 +1,6 @@
+{
+  "name": "الأستاذ رضوان راكب — التاريخ والجغرافيا",
+  "description": "المنصة الأكاديمية الرسمية للأستاذ رضوان راكب لمادتي التاريخ والجغرافيا بالسلك التأهيلي بالمغرب — Portail Académique d'Histoire et de Géographie.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

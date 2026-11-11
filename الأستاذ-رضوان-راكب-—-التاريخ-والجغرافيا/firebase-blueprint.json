@@ -1,0 +1,897 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile for students and the exclusive administrator (Prof. Redouane Rakeb).",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 5,
+          "maxLength": 160
+        },
+        "role": {
+          "type": "string",
+          "enum": ["student", "admin"]
+        },
+        "educationalLevel": {
+          "type": "string",
+          "enum": ["1bac", "2bac", "admin"]
+        },
+        "branch": {
+          "type": "string",
+          "enum": ["Sciences", "Arts and Humanities", "Administration"]
+        },
+        "group": {
+          "type": "string",
+          "enum": ["G1", "G2", "G3", "G4", "ALL"]
+        },
+        "accountStatus": {
+          "type": "string",
+          "enum": ["active", "pending_verification", "suspended"]
+        },
+        "notificationPreferences": {
+          "type": "object"
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "enum": ["ar", "fr"]
+        },
+        "isSelfDeclared": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "fullName",
+        "email",
+        "role",
+        "educationalLevel",
+        "branch",
+        "group",
+        "accountStatus",
+        "notificationPreferences",
+        "preferredLanguage",
+        "isSelfDeclared",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminRegistry": {
+      "title": "AdminRegistry",
+      "description": "Trusted administrator lookup document for Prof. Redouane Rakeb.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 5,
+          "maxLength": 160
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "fullName", "createdAt"]
+    },
+    "WebsiteSettings": {
+      "title": "WebsiteSettings",
+      "description": "Global platform configuration managed exclusively by the administrator.",
+      "type": "object",
+      "properties": {
+        "websiteName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 160
+        },
+        "teacherName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "defaultLanguage": {
+          "type": "string",
+          "enum": ["ar", "fr"]
+        },
+        "supportedLanguages": {
+          "type": "array"
+        },
+        "designSettings": {
+          "type": "object"
+        },
+        "updatedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "websiteName",
+        "teacherName",
+        "defaultLanguage",
+        "supportedLanguages",
+        "designSettings",
+        "updatedBy",
+        "updatedAt"
+      ]
+    },
+    "EducationalStructure": {
+      "title": "EducationalStructure",
+      "description": "Defines the official educational structure.",
+      "type": "object",
+      "properties": {
+        "structureId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "levels": {
+          "type": "array"
+        },
+        "branches": {
+          "type": "array"
+        },
+        "groups": {
+          "type": "array"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["structureId", "levels", "branches", "groups", "updatedAt"]
+    },
+    "CmsSubject": {
+      "title": "CmsSubject",
+      "description": "Educational subject managed by the administrator (initially History and Geography).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "slug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "titleAr": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "titleFr": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "descriptionAr": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "descriptionFr": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "order": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "published", "scheduled", "unpublished", "archived"]
+        },
+        "audienceMode": {
+          "type": "string",
+          "enum": ["independent"]
+        },
+        "audienceConfig": {
+          "type": "object"
+        },
+        "effectiveStatus": {
+          "type": "string",
+          "enum": ["draft", "published", "scheduled", "unpublished", "archived"]
+        },
+        "effectiveGroupKeys": {
+          "type": "array"
+        },
+        "authorUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "slug",
+        "titleAr",
+        "titleFr",
+        "descriptionAr",
+        "descriptionFr",
+        "order",
+        "status",
+        "audienceMode",
+        "audienceConfig",
+        "effectiveStatus",
+        "effectiveGroupKeys",
+        "authorUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CmsUnit": {
+      "title": "CmsUnit",
+      "description": "Flexible hierarchical unit, chapter, or custom category within a subject.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "subjectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "parentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "categoryKind": {
+          "type": "string",
+          "enum": ["unit", "chapter", "section", "custom"]
+        },
+        "customCategoryLabel": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "titleAr": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "titleFr": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "descriptionAr": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "descriptionFr": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "order": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "published", "scheduled", "unpublished", "archived"]
+        },
+        "audienceMode": {
+          "type": "string",
+          "enum": ["independent", "inherit"]
+        },
+        "audienceConfig": {
+          "type": "object"
+        },
+        "effectiveStatus": {
+          "type": "string",
+          "enum": ["draft", "published", "scheduled", "unpublished", "archived"]
+        },
+        "effectiveGroupKeys": {
+          "type": "array"
+        },
+        "authorUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "subjectId",
+        "parentId",
+        "categoryKind",
+        "customCategoryLabel",
+        "titleAr",
+        "titleFr",
+        "descriptionAr",
+        "descriptionFr",
+        "order",
+        "status",
+        "audienceMode",
+        "audienceConfig",
+        "effectiveStatus",
+        "effectiveGroupKeys",
+        "authorUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CmsLesson": {
+      "title": "CmsLesson",
+      "description": "Educational lesson with rich-text content blocks, attachments, version tracking, and audience targeting.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "subjectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "unitId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "titleAr": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "titleFr": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "descriptionAr": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "descriptionFr": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "contentAr": {
+          "type": "string",
+          "maxLength": 50000
+        },
+        "contentFr": {
+          "type": "string",
+          "maxLength": 50000
+        },
+        "blocks": {
+          "type": "array"
+        },
+        "attachmentIds": {
+          "type": "array"
+        },
+        "order": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "published", "scheduled", "unpublished", "archived"]
+        },
+        "audienceMode": {
+          "type": "string",
+          "enum": ["independent", "inherit"]
+        },
+        "audienceConfig": {
+          "type": "object"
+        },
+        "effectiveStatus": {
+          "type": "string",
+          "enum": ["draft", "published", "scheduled", "unpublished", "archived"]
+        },
+        "effectiveGroupKeys": {
+          "type": "array"
+        },
+        "version": {
+          "type": "integer"
+        },
+        "previousVersionTitleAr": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "previousVersionContentAr": {
+          "type": "string",
+          "maxLength": 50000
+        },
+        "authorUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "publishedAtIso": {
+          "type": "string",
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "id",
+        "subjectId",
+        "unitId",
+        "titleAr",
+        "titleFr",
+        "descriptionAr",
+        "descriptionFr",
+        "contentAr",
+        "contentFr",
+        "blocks",
+        "attachmentIds",
+        "order",
+        "status",
+        "audienceMode",
+        "audienceConfig",
+        "effectiveStatus",
+        "effectiveGroupKeys",
+        "version",
+        "previousVersionTitleAr",
+        "previousVersionContentAr",
+        "authorUid",
+        "createdAt",
+        "updatedAt",
+        "publishedAtIso"
+      ]
+    },
+    "CmsResource": {
+      "title": "CmsResource",
+      "description": "Protected educational resource metadata (PDF, DOCX, PPTX, Image, etc.) linked to Firebase Storage.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "titleAr": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "titleFr": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "descriptionAr": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "descriptionFr": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "category": {
+          "type": "string",
+          "enum": ["summary", "exercise", "examination_paper", "map_atlas", "archive_doc", "general"]
+        },
+        "fileName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "filePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "downloadUrl": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "fileType": {
+          "type": "string",
+          "enum": ["PDF", "DOCX", "PPTX", "IMAGE", "XLSX", "TXT"]
+        },
+        "mimeType": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "fileSize": {
+          "type": "integer"
+        },
+        "subjectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "unitId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "lessonId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "order": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "published", "scheduled", "unpublished", "archived"]
+        },
+        "audienceMode": {
+          "type": "string",
+          "enum": ["independent", "inherit"]
+        },
+        "audienceConfig": {
+          "type": "object"
+        },
+        "effectiveStatus": {
+          "type": "string",
+          "enum": ["draft", "published", "scheduled", "unpublished", "archived"]
+        },
+        "effectiveGroupKeys": {
+          "type": "array"
+        },
+        "authorUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "titleAr",
+        "titleFr",
+        "descriptionAr",
+        "descriptionFr",
+        "category",
+        "fileName",
+        "filePath",
+        "downloadUrl",
+        "fileType",
+        "mimeType",
+        "fileSize",
+        "subjectId",
+        "unitId",
+        "lessonId",
+        "order",
+        "status",
+        "audienceMode",
+        "audienceConfig",
+        "effectiveStatus",
+        "effectiveGroupKeys",
+        "authorUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CmsExamination": {
+      "title": "CmsExamination",
+      "description": "Examination or exercise item with attachments and group audience targeting.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "titleAr": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "titleFr": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "descriptionAr": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "descriptionFr": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "examKind": {
+          "type": "string",
+          "enum": ["examination", "exercise", "continuous_assessment"]
+        },
+        "subjectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "unitId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "attachmentIds": {
+          "type": "array"
+        },
+        "durationMinutes": {
+          "type": "integer"
+        },
+        "gradingScale": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "order": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "published", "scheduled", "unpublished", "archived"]
+        },
+        "audienceMode": {
+          "type": "string",
+          "enum": ["independent", "inherit"]
+        },
+        "audienceConfig": {
+          "type": "object"
+        },
+        "effectiveStatus": {
+          "type": "string",
+          "enum": ["draft", "published", "scheduled", "unpublished", "archived"]
+        },
+        "effectiveGroupKeys": {
+          "type": "array"
+        },
+        "authorUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "titleAr",
+        "titleFr",
+        "descriptionAr",
+        "descriptionFr",
+        "examKind",
+        "subjectId",
+        "unitId",
+        "attachmentIds",
+        "durationMinutes",
+        "gradingScale",
+        "order",
+        "status",
+        "audienceMode",
+        "audienceConfig",
+        "effectiveStatus",
+        "effectiveGroupKeys",
+        "authorUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AcademicContentItem": {
+      "title": "AcademicContentItem",
+      "description": "Schema for Announcements collection.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 240
+        },
+        "status": {
+          "type": "string",
+          "enum": ["published", "scheduled", "draft", "archived"]
+        },
+        "educationalLevel": {
+          "type": "string",
+          "enum": ["1bac", "2bac", "all"]
+        },
+        "branch": {
+          "type": "string",
+          "enum": ["Sciences", "Arts and Humanities", "all"]
+        },
+        "authorUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "status",
+        "educationalLevel",
+        "branch",
+        "authorUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "NotificationRecord": {
+      "title": "NotificationRecord",
+      "description": "Notification record targeted to a specific user UID.",
+      "type": "object",
+      "properties": {
+        "recipientUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 200
+        },
+        "read": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["recipientUid", "title", "read", "createdAt"]
+    },
+    "AdminActivityLog": {
+      "title": "AdminActivityLog",
+      "description": "Immutable audit record of administrative actions.",
+      "type": "object",
+      "properties": {
+        "actorUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "action": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 160
+        },
+        "targetPath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["actorUid", "action", "targetPath", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Student and administrator profiles isolated by UID."
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminRegistry" },
+      "description": "Exclusive administrator lookup registry."
+    },
+    "/websiteSettings/{settingId}": {
+      "schema": { "$ref": "#/entities/WebsiteSettings" },
+      "description": "Global platform configuration."
+    },
+    "/educationalStructure/{structureId}": {
+      "schema": { "$ref": "#/entities/EducationalStructure" },
+      "description": "Official educational levels, branches, and groups."
+    },
+    "/subjects/{subjectId}": {
+      "schema": { "$ref": "#/entities/CmsSubject" },
+      "description": "Subjects collection (History and Geography + custom subjects)."
+    },
+    "/units/{unitId}": {
+      "schema": { "$ref": "#/entities/CmsUnit" },
+      "description": "Flexible hierarchical units, chapters, and custom categories."
+    },
+    "/lessons/{lessonId}": {
+      "schema": { "$ref": "#/entities/CmsLesson" },
+      "description": "Rich-text educational lessons with version history and group targeting."
+    },
+    "/resources/{resourceId}": {
+      "schema": { "$ref": "#/entities/CmsResource" },
+      "description": "Protected educational resources and file metadata."
+    },
+    "/examinations/{examId}": {
+      "schema": { "$ref": "#/entities/CmsExamination" },
+      "description": "Examinations and exercises with group audience targeting."
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/AcademicContentItem" },
+      "description": "Academic announcements collection."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/NotificationRecord" },
+      "description": "User notification records."
+    },
+    "/adminActivityLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AdminActivityLog" },
+      "description": "Administrative activity audit logs."
+    }
+  }
+}

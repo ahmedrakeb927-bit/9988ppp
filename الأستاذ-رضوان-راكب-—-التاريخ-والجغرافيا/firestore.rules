@@ -1,0 +1,810 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedEmail() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    // Exclusive Administrator Identity: الأستاذ رضوان راكب (a.r.identity007@gmail.com) + runtime owner
+    function isAuthorizedAdminEmail() {
+      return isVerifiedEmail() && (
+        request.auth.token.email == 'a.r.identity007@gmail.com' ||
+        request.auth.token.email == 'ucufdrf@gmail.com'
+      );
+    }
+
+    // Single-document admin check (uses DB lookup + verified email check)
+    function isAdmin() {
+      return isSignedIn() && (
+        isAuthorizedAdminEmail() ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Backend verification that a student is active and their cohort key is in effectiveGroupKeys
+    function isAuthorizedStudentForDoc(data) {
+      return isSignedIn() &&
+        data.status == 'published' &&
+        data.effectiveStatus == 'published' &&
+        data.effectiveGroupKeys is list &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student' &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountStatus != 'suspended' &&
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.educationalLevel + ':' +
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.branch + ':' +
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.group
+        ) in data.effectiveGroupKeys;
+    }
+
+    function isValidPublicationStatus(st) {
+      return st == 'draft' ||
+        st == 'published' ||
+        st == 'scheduled' ||
+        st == 'unpublished' ||
+        st == 'archived';
+    }
+
+    // 3. Entity Validation Blueprints
+    function isValidStudentStreamPair(level, branch, grp) {
+      return (
+        (level == '1bac' && branch == 'Sciences' && (grp == 'G1' || grp == 'G2' || grp == 'G3' || grp == 'G4')) ||
+        (level == '2bac' && branch == 'Arts and Humanities' && (grp == 'G1' || grp == 'G2' || grp == 'G3' || grp == 'G4'))
+      );
+    }
+
+    function isValidAdminStreamPair(level, branch, grp) {
+      return level == 'admin' && branch == 'Administration' && grp == 'ALL';
+    }
+
+    function isValidNotificationPreferences(prefs) {
+      return prefs is map &&
+        prefs.keys().hasAll(['announcements', 'examinations', 'resources']) &&
+        prefs.keys().hasOnly(['announcements', 'examinations', 'resources']) &&
+        prefs.announcements is bool &&
+        prefs.examinations is bool &&
+        prefs.resources is bool;
+    }
+
+    function isValidUserProfile(data) {
+      return data is map &&
+        data.keys().hasAll([
+          'uid',
+          'fullName',
+          'email',
+          'role',
+          'educationalLevel',
+          'branch',
+          'group',
+          'accountStatus',
+          'notificationPreferences',
+          'preferredLanguage',
+          'isSelfDeclared',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'uid',
+          'fullName',
+          'email',
+          'role',
+          'educationalLevel',
+          'branch',
+          'group',
+          'accountStatus',
+          'notificationPreferences',
+          'preferredLanguage',
+          'isSelfDeclared',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.uid == request.auth.uid &&
+        data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 120 &&
+        data.email is string && data.email.size() >= 5 && data.email.size() <= 160 &&
+        (data.role == 'student' || data.role == 'admin') &&
+        (data.accountStatus == 'active' || data.accountStatus == 'pending_verification' || data.accountStatus == 'suspended') &&
+        isValidNotificationPreferences(data.notificationPreferences) &&
+        (data.preferredLanguage == 'ar' || data.preferredLanguage == 'fr') &&
+        data.isSelfDeclared is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        (
+          (data.role == 'student' && data.isSelfDeclared == true && isValidStudentStreamPair(data.educationalLevel, data.branch, data.group)) ||
+          (data.role == 'admin' && isValidAdminStreamPair(data.educationalLevel, data.branch, data.group))
+        );
+    }
+
+    function isValidAdminRegistry(data) {
+      return data is map &&
+        data.keys().hasAll(['uid', 'email', 'fullName', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'fullName', 'createdAt']) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.uid == request.auth.uid &&
+        data.email is string && data.email.size() >= 5 && data.email.size() <= 160 &&
+        data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 120 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidWebsiteSettings(data) {
+      return data is map &&
+        data.keys().hasAll([
+          'websiteName',
+          'teacherName',
+          'defaultLanguage',
+          'supportedLanguages',
+          'designSettings',
+          'updatedBy',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'websiteName',
+          'teacherName',
+          'defaultLanguage',
+          'supportedLanguages',
+          'designSettings',
+          'updatedBy',
+          'updatedAt'
+        ]) &&
+        data.websiteName is string && data.websiteName.size() >= 2 && data.websiteName.size() <= 160 &&
+        data.teacherName is string && data.teacherName.size() >= 2 && data.teacherName.size() <= 120 &&
+        (data.defaultLanguage == 'ar' || data.defaultLanguage == 'fr') &&
+        data.supportedLanguages is list && data.supportedLanguages.size() >= 1 && data.supportedLanguages.size() <= 2 &&
+        data.supportedLanguages[0] is string && data.supportedLanguages[0].size() == 2 &&
+        data.designSettings is map &&
+        data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128 &&
+        data.updatedBy == request.auth.uid &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidEducationalStructure(data) {
+      return data is map &&
+        data.keys().hasAll(['structureId', 'levels', 'branches', 'groups', 'updatedAt']) &&
+        data.keys().hasOnly(['structureId', 'levels', 'branches', 'groups', 'updatedAt']) &&
+        data.structureId is string && data.structureId.size() >= 1 && data.structureId.size() <= 64 &&
+        data.levels is list && data.levels.size() >= 1 && data.levels.size() <= 4 &&
+        data.levels[0] is string && data.levels[0].size() <= 80 &&
+        data.branches is list && data.branches.size() >= 1 && data.branches.size() <= 4 &&
+        data.branches[0] is string && data.branches[0].size() <= 80 &&
+        data.groups is list && data.groups.size() >= 1 && data.groups.size() <= 8 &&
+        data.groups[0] is string && data.groups[0].size() <= 20 &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCmsSubject(data) {
+      return data is map &&
+        data.keys().hasAll([
+          'id',
+          'slug',
+          'titleAr',
+          'titleFr',
+          'descriptionAr',
+          'descriptionFr',
+          'order',
+          'status',
+          'audienceMode',
+          'audienceConfig',
+          'effectiveStatus',
+          'effectiveGroupKeys',
+          'authorUid',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'slug',
+          'titleAr',
+          'titleFr',
+          'descriptionAr',
+          'descriptionFr',
+          'order',
+          'status',
+          'audienceMode',
+          'audienceConfig',
+          'effectiveStatus',
+          'effectiveGroupKeys',
+          'authorUid',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 64 &&
+        data.titleAr is string && data.titleAr.size() >= 1 && data.titleAr.size() <= 200 &&
+        data.titleFr is string && data.titleFr.size() >= 1 && data.titleFr.size() <= 200 &&
+        data.descriptionAr is string && data.descriptionAr.size() <= 2000 &&
+        data.descriptionFr is string && data.descriptionFr.size() <= 2000 &&
+        data.order is int && data.order >= 0 && data.order <= 10000 &&
+        isValidPublicationStatus(data.status) &&
+        data.audienceMode == 'independent' &&
+        data.audienceConfig is map &&
+        isValidPublicationStatus(data.effectiveStatus) &&
+        data.effectiveGroupKeys is list && data.effectiveGroupKeys.size() <= 8 &&
+        (data.effectiveGroupKeys.size() == 0 || (data.effectiveGroupKeys[0] is string && data.effectiveGroupKeys[0].size() <= 40)) &&
+        data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128 &&
+        data.authorUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCmsUnit(data) {
+      return data is map &&
+        data.keys().hasAll([
+          'id',
+          'subjectId',
+          'parentId',
+          'categoryKind',
+          'customCategoryLabel',
+          'titleAr',
+          'titleFr',
+          'descriptionAr',
+          'descriptionFr',
+          'order',
+          'status',
+          'audienceMode',
+          'audienceConfig',
+          'effectiveStatus',
+          'effectiveGroupKeys',
+          'authorUid',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'subjectId',
+          'parentId',
+          'categoryKind',
+          'customCategoryLabel',
+          'titleAr',
+          'titleFr',
+          'descriptionAr',
+          'descriptionFr',
+          'order',
+          'status',
+          'audienceMode',
+          'audienceConfig',
+          'effectiveStatus',
+          'effectiveGroupKeys',
+          'authorUid',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.subjectId is string && data.subjectId.size() >= 1 && data.subjectId.size() <= 128 &&
+        data.parentId is string && data.parentId.size() <= 128 &&
+        (data.categoryKind == 'unit' || data.categoryKind == 'chapter' || data.categoryKind == 'section' || data.categoryKind == 'custom') &&
+        data.customCategoryLabel is string && data.customCategoryLabel.size() <= 120 &&
+        data.titleAr is string && data.titleAr.size() >= 1 && data.titleAr.size() <= 240 &&
+        data.titleFr is string && data.titleFr.size() >= 1 && data.titleFr.size() <= 240 &&
+        data.descriptionAr is string && data.descriptionAr.size() <= 2000 &&
+        data.descriptionFr is string && data.descriptionFr.size() <= 2000 &&
+        data.order is int && data.order >= 0 && data.order <= 10000 &&
+        isValidPublicationStatus(data.status) &&
+        (data.audienceMode == 'independent' || data.audienceMode == 'inherit') &&
+        data.audienceConfig is map &&
+        isValidPublicationStatus(data.effectiveStatus) &&
+        data.effectiveGroupKeys is list && data.effectiveGroupKeys.size() <= 8 &&
+        (data.effectiveGroupKeys.size() == 0 || (data.effectiveGroupKeys[0] is string && data.effectiveGroupKeys[0].size() <= 40)) &&
+        data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128 &&
+        data.authorUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCmsLesson(data) {
+      return data is map &&
+        data.keys().hasAll([
+          'id',
+          'subjectId',
+          'unitId',
+          'titleAr',
+          'titleFr',
+          'descriptionAr',
+          'descriptionFr',
+          'contentAr',
+          'contentFr',
+          'blocks',
+          'attachmentIds',
+          'order',
+          'status',
+          'audienceMode',
+          'audienceConfig',
+          'effectiveStatus',
+          'effectiveGroupKeys',
+          'version',
+          'previousVersionTitleAr',
+          'previousVersionContentAr',
+          'authorUid',
+          'createdAt',
+          'updatedAt',
+          'publishedAtIso'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'subjectId',
+          'unitId',
+          'titleAr',
+          'titleFr',
+          'descriptionAr',
+          'descriptionFr',
+          'contentAr',
+          'contentFr',
+          'blocks',
+          'attachmentIds',
+          'order',
+          'status',
+          'audienceMode',
+          'audienceConfig',
+          'effectiveStatus',
+          'effectiveGroupKeys',
+          'version',
+          'previousVersionTitleAr',
+          'previousVersionContentAr',
+          'authorUid',
+          'createdAt',
+          'updatedAt',
+          'publishedAtIso'
+        ]) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.subjectId is string && data.subjectId.size() >= 1 && data.subjectId.size() <= 128 &&
+        data.unitId is string && data.unitId.size() <= 128 &&
+        data.titleAr is string && data.titleAr.size() >= 1 && data.titleAr.size() <= 240 &&
+        data.titleFr is string && data.titleFr.size() >= 1 && data.titleFr.size() <= 240 &&
+        data.descriptionAr is string && data.descriptionAr.size() <= 2000 &&
+        data.descriptionFr is string && data.descriptionFr.size() <= 2000 &&
+        data.contentAr is string && data.contentAr.size() <= 50000 &&
+        data.contentFr is string && data.contentFr.size() <= 50000 &&
+        data.blocks is list && data.blocks.size() <= 100 &&
+        (data.blocks.size() == 0 || data.blocks[0] is map) &&
+        data.attachmentIds is list && data.attachmentIds.size() <= 30 &&
+        (data.attachmentIds.size() == 0 || (data.attachmentIds[0] is string && data.attachmentIds[0].size() <= 128)) &&
+        data.order is int && data.order >= 0 && data.order <= 10000 &&
+        isValidPublicationStatus(data.status) &&
+        (data.audienceMode == 'independent' || data.audienceMode == 'inherit') &&
+        data.audienceConfig is map &&
+        isValidPublicationStatus(data.effectiveStatus) &&
+        data.effectiveGroupKeys is list && data.effectiveGroupKeys.size() <= 8 &&
+        (data.effectiveGroupKeys.size() == 0 || (data.effectiveGroupKeys[0] is string && data.effectiveGroupKeys[0].size() <= 40)) &&
+        data.version is int && data.version >= 1 && data.version <= 10000 &&
+        data.previousVersionTitleAr is string && data.previousVersionTitleAr.size() <= 240 &&
+        data.previousVersionContentAr is string && data.previousVersionContentAr.size() <= 50000 &&
+        data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128 &&
+        data.authorUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        data.publishedAtIso is string && data.publishedAtIso.size() <= 64;
+    }
+
+    function isValidCmsResource(data) {
+      return data is map &&
+        data.keys().hasAll([
+          'id',
+          'titleAr',
+          'titleFr',
+          'descriptionAr',
+          'descriptionFr',
+          'category',
+          'fileName',
+          'filePath',
+          'downloadUrl',
+          'fileType',
+          'mimeType',
+          'fileSize',
+          'subjectId',
+          'unitId',
+          'lessonId',
+          'order',
+          'status',
+          'audienceMode',
+          'audienceConfig',
+          'effectiveStatus',
+          'effectiveGroupKeys',
+          'authorUid',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'titleAr',
+          'titleFr',
+          'descriptionAr',
+          'descriptionFr',
+          'category',
+          'fileName',
+          'filePath',
+          'downloadUrl',
+          'fileType',
+          'mimeType',
+          'fileSize',
+          'subjectId',
+          'unitId',
+          'lessonId',
+          'order',
+          'status',
+          'audienceMode',
+          'audienceConfig',
+          'effectiveStatus',
+          'effectiveGroupKeys',
+          'authorUid',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.titleAr is string && data.titleAr.size() >= 1 && data.titleAr.size() <= 240 &&
+        data.titleFr is string && data.titleFr.size() >= 1 && data.titleFr.size() <= 240 &&
+        data.descriptionAr is string && data.descriptionAr.size() <= 2000 &&
+        data.descriptionFr is string && data.descriptionFr.size() <= 2000 &&
+        (data.category == 'summary' || data.category == 'exercise' || data.category == 'examination_paper' || data.category == 'map_atlas' || data.category == 'archive_doc' || data.category == 'general') &&
+        data.fileName is string && data.fileName.size() >= 1 && data.fileName.size() <= 240 &&
+        data.filePath is string && data.filePath.size() >= 1 && data.filePath.size() <= 500 &&
+        data.downloadUrl is string && data.downloadUrl.size() <= 2000 &&
+        (data.fileType == 'PDF' || data.fileType == 'DOCX' || data.fileType == 'PPTX' || data.fileType == 'IMAGE' || data.fileType == 'XLSX' || data.fileType == 'TXT') &&
+        data.mimeType is string && data.mimeType.size() <= 160 &&
+        data.fileSize is int && data.fileSize > 0 && data.fileSize <= 26214400 &&
+        data.subjectId is string && data.subjectId.size() >= 1 && data.subjectId.size() <= 128 &&
+        data.unitId is string && data.unitId.size() <= 128 &&
+        data.lessonId is string && data.lessonId.size() <= 128 &&
+        data.order is int && data.order >= 0 && data.order <= 10000 &&
+        isValidPublicationStatus(data.status) &&
+        (data.audienceMode == 'independent' || data.audienceMode == 'inherit') &&
+        data.audienceConfig is map &&
+        isValidPublicationStatus(data.effectiveStatus) &&
+        data.effectiveGroupKeys is list && data.effectiveGroupKeys.size() <= 8 &&
+        (data.effectiveGroupKeys.size() == 0 || (data.effectiveGroupKeys[0] is string && data.effectiveGroupKeys[0].size() <= 40)) &&
+        data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128 &&
+        data.authorUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCmsExamination(data) {
+      return data is map &&
+        data.keys().hasAll([
+          'id',
+          'titleAr',
+          'titleFr',
+          'descriptionAr',
+          'descriptionFr',
+          'examKind',
+          'subjectId',
+          'unitId',
+          'attachmentIds',
+          'durationMinutes',
+          'gradingScale',
+          'order',
+          'status',
+          'audienceMode',
+          'audienceConfig',
+          'effectiveStatus',
+          'effectiveGroupKeys',
+          'authorUid',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'titleAr',
+          'titleFr',
+          'descriptionAr',
+          'descriptionFr',
+          'examKind',
+          'subjectId',
+          'unitId',
+          'attachmentIds',
+          'durationMinutes',
+          'gradingScale',
+          'order',
+          'status',
+          'audienceMode',
+          'audienceConfig',
+          'effectiveStatus',
+          'effectiveGroupKeys',
+          'authorUid',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.titleAr is string && data.titleAr.size() >= 1 && data.titleAr.size() <= 240 &&
+        data.titleFr is string && data.titleFr.size() >= 1 && data.titleFr.size() <= 240 &&
+        data.descriptionAr is string && data.descriptionAr.size() <= 2000 &&
+        data.descriptionFr is string && data.descriptionFr.size() <= 2000 &&
+        (data.examKind == 'examination' || data.examKind == 'exercise' || data.examKind == 'continuous_assessment') &&
+        data.subjectId is string && data.subjectId.size() >= 1 && data.subjectId.size() <= 128 &&
+        data.unitId is string && data.unitId.size() <= 128 &&
+        data.attachmentIds is list && data.attachmentIds.size() <= 20 &&
+        (data.attachmentIds.size() == 0 || (data.attachmentIds[0] is string && data.attachmentIds[0].size() <= 128)) &&
+        data.durationMinutes is int && data.durationMinutes >= 10 && data.durationMinutes <= 360 &&
+        data.gradingScale is string && data.gradingScale.size() >= 1 && data.gradingScale.size() <= 40 &&
+        data.order is int && data.order >= 0 && data.order <= 10000 &&
+        isValidPublicationStatus(data.status) &&
+        (data.audienceMode == 'independent' || data.audienceMode == 'inherit') &&
+        data.audienceConfig is map &&
+        isValidPublicationStatus(data.effectiveStatus) &&
+        data.effectiveGroupKeys is list && data.effectiveGroupKeys.size() <= 8 &&
+        (data.effectiveGroupKeys.size() == 0 || (data.effectiveGroupKeys[0] is string && data.effectiveGroupKeys[0].size() <= 40)) &&
+        data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128 &&
+        data.authorUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAcademicContentItem(data) {
+      return data is map &&
+        data.keys().hasAll([
+          'id',
+          'title',
+          'status',
+          'educationalLevel',
+          'branch',
+          'authorUid',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'title',
+          'status',
+          'educationalLevel',
+          'branch',
+          'authorUid',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 240 &&
+        (data.status == 'published' || data.status == 'scheduled' || data.status == 'draft' || data.status == 'archived') &&
+        (data.educationalLevel == '1bac' || data.educationalLevel == '2bac' || data.educationalLevel == 'all') &&
+        (data.branch == 'Sciences' || data.branch == 'Arts and Humanities' || data.branch == 'all') &&
+        data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128 &&
+        data.authorUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidNotificationRecord(data) {
+      return data is map &&
+        data.keys().hasAll(['recipientUid', 'title', 'read', 'createdAt']) &&
+        data.keys().hasOnly(['recipientUid', 'title', 'read', 'createdAt']) &&
+        data.recipientUid is string && data.recipientUid.size() >= 1 && data.recipientUid.size() <= 128 &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 200 &&
+        data.read is bool &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidAdminActivityLog(data) {
+      return data is map &&
+        data.keys().hasAll(['actorUid', 'action', 'targetPath', 'createdAt']) &&
+        data.keys().hasOnly(['actorUid', 'action', 'targetPath', 'createdAt']) &&
+        data.actorUid is string && data.actorUid.size() >= 1 && data.actorUid.size() <= 128 &&
+        data.actorUid == request.auth.uid &&
+        data.action is string && data.action.size() >= 2 && data.action.size() <= 160 &&
+        data.targetPath is string && data.targetPath.size() >= 1 && data.targetPath.size() <= 240 &&
+        data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // COLLECTION 1: /users/{userId}
+    // ===============================================================
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isSignedIn() && (existing().uid == request.auth.uid || isAuthorizedAdminEmail());
+
+      allow create: if isSignedIn() &&
+        isValidId(userId) &&
+        userId == request.auth.uid &&
+        isValidUserProfile(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (
+          (incoming().role == 'student' && incoming().accountStatus != 'suspended') ||
+          (incoming().role == 'admin' && isAdmin())
+        );
+
+      allow update: if isSignedIn() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (
+            request.auth.uid == userId &&
+            existing().role == 'student' &&
+            incoming().role == 'student' &&
+            existing().accountStatus != 'suspended' &&
+            incoming().isSelfDeclared == true &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'fullName',
+              'educationalLevel',
+              'branch',
+              'group',
+              'preferredLanguage',
+              'notificationPreferences',
+              'accountStatus',
+              'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isSignedIn() && isValidId(userId) && isAdmin();
+    }
+
+    // ===============================================================
+    // COLLECTION 2: /admins/{adminUid}
+    // ===============================================================
+    match /admins/{adminUid} {
+      allow get: if isSignedIn() && isValidId(adminUid) && (request.auth.uid == adminUid || isAdmin());
+      allow list: if isSignedIn() && (existing().uid == request.auth.uid || isAuthorizedAdminEmail());
+      allow create: if isSignedIn() &&
+        isValidId(adminUid) &&
+        adminUid == request.auth.uid &&
+        isValidAdminRegistry(incoming()) &&
+        incoming().createdAt == request.time &&
+        isAuthorizedAdminEmail();
+      allow update, delete: if false;
+    }
+
+    // ===============================================================
+    // COLLECTION 3: /websiteSettings/{settingId}
+    // ===============================================================
+    match /websiteSettings/{settingId} {
+      allow get: if isSignedIn() && isValidId(settingId);
+      allow list: if isSignedIn() && existing().defaultLanguage in ['ar', 'fr'];
+      allow create: if isSignedIn() &&
+        isValidId(settingId) &&
+        isValidWebsiteSettings(incoming()) &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+      allow update: if isSignedIn() &&
+        isValidId(settingId) &&
+        isValidWebsiteSettings(incoming()) &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+      allow delete: if isSignedIn() && isValidId(settingId) && isAdmin();
+    }
+
+    // ===============================================================
+    // COLLECTION 4: /educationalStructure/{structureId}
+    // ===============================================================
+    match /educationalStructure/{structureId} {
+      allow get: if isSignedIn() && isValidId(structureId);
+      allow list: if isSignedIn() && existing().structureId is string;
+      allow create: if isSignedIn() &&
+        isValidId(structureId) &&
+        isValidEducationalStructure(incoming()) &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+      allow update: if isSignedIn() &&
+        isValidId(structureId) &&
+        isValidEducationalStructure(incoming()) &&
+        incoming().structureId == existing().structureId &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+      allow delete: if isSignedIn() && isValidId(structureId) && isAdmin();
+    }
+
+    // ===============================================================
+    // COLLECTION 5: /subjects/{subjectId}
+    // ===============================================================
+    match /subjects/{subjectId} {
+      allow get: if isSignedIn() && isValidId(subjectId) && (isAdmin() || isAuthorizedStudentForDoc(existing()));
+      allow list: if isSignedIn() && (existing().status == 'published' || isAuthorizedAdminEmail());
+      allow create: if isSignedIn() && isValidId(subjectId) && isValidCmsSubject(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(subjectId) && isValidCmsSubject(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time && isAdmin();
+      allow delete: if isSignedIn() && isValidId(subjectId) && isAdmin();
+    }
+
+    // ===============================================================
+    // COLLECTION 6: /units/{unitId}
+    // ===============================================================
+    match /units/{unitId} {
+      allow get: if isSignedIn() && isValidId(unitId) && (isAdmin() || isAuthorizedStudentForDoc(existing()));
+      allow list: if isSignedIn() && (existing().status == 'published' || isAuthorizedAdminEmail());
+      allow create: if isSignedIn() && isValidId(unitId) && isValidCmsUnit(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(unitId) && isValidCmsUnit(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time && isAdmin();
+      allow delete: if isSignedIn() && isValidId(unitId) && isAdmin();
+    }
+
+    // ===============================================================
+    // COLLECTION 7: /lessons/{lessonId}
+    // ===============================================================
+    match /lessons/{lessonId} {
+      allow get: if isSignedIn() && isValidId(lessonId) && (isAdmin() || isAuthorizedStudentForDoc(existing()));
+      allow list: if isSignedIn() && (existing().status == 'published' || isAuthorizedAdminEmail());
+      allow create: if isSignedIn() && isValidId(lessonId) && isValidCmsLesson(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(lessonId) && isValidCmsLesson(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time && isAdmin();
+      allow delete: if isSignedIn() && isValidId(lessonId) && isAdmin();
+    }
+
+    // ===============================================================
+    // COLLECTION 8: /resources/{resourceId}
+    // ===============================================================
+    match /resources/{resourceId} {
+      allow get: if isSignedIn() && isValidId(resourceId) && (isAdmin() || isAuthorizedStudentForDoc(existing()));
+      allow list: if isSignedIn() && (existing().status == 'published' || isAuthorizedAdminEmail());
+      allow create: if isSignedIn() && isValidId(resourceId) && isValidCmsResource(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(resourceId) && isValidCmsResource(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time && isAdmin();
+      allow delete: if isSignedIn() && isValidId(resourceId) && isAdmin();
+    }
+
+    // ===============================================================
+    // COLLECTION 9: /examinations/{examId}
+    // ===============================================================
+    match /examinations/{examId} {
+      allow get: if isSignedIn() && isValidId(examId) && (isAdmin() || isAuthorizedStudentForDoc(existing()));
+      allow list: if isSignedIn() && (existing().status == 'published' || isAuthorizedAdminEmail());
+      allow create: if isSignedIn() && isValidId(examId) && isValidCmsExamination(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(examId) && isValidCmsExamination(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time && isAdmin();
+      allow delete: if isSignedIn() && isValidId(examId) && isAdmin();
+    }
+
+    // ===============================================================
+    // COLLECTION 10: /announcements/{announcementId}
+    // ===============================================================
+    match /announcements/{announcementId} {
+      allow get: if isSignedIn() && isValidId(announcementId) && (existing().status == 'published' || isAdmin());
+      allow list: if isSignedIn() && (existing().status == 'published' || isAuthorizedAdminEmail());
+      allow create: if isSignedIn() && isValidId(announcementId) && isValidAcademicContentItem(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time && isAdmin();
+      allow update: if isSignedIn() && isValidId(announcementId) && isValidAcademicContentItem(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time && isAdmin();
+      allow delete: if isSignedIn() && isValidId(announcementId) && isAdmin();
+    }
+
+    // ===============================================================
+    // COLLECTION 11: /notifications/{notificationId}
+    // ===============================================================
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn() && isValidId(notificationId) && (existing().recipientUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (existing().recipientUid == request.auth.uid || isAuthorizedAdminEmail());
+      allow create: if isSignedIn() && isValidId(notificationId) && isValidNotificationRecord(incoming()) && incoming().createdAt == request.time && isAdmin();
+      allow update: if isSignedIn() &&
+        isValidId(notificationId) &&
+        isValidNotificationRecord(incoming()) &&
+        incoming().recipientUid == existing().recipientUid &&
+        incoming().title == existing().title &&
+        incoming().createdAt == existing().createdAt &&
+        (
+          isAdmin() ||
+          (existing().recipientUid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['read']))
+        );
+      allow delete: if isSignedIn() && isValidId(notificationId) && isAdmin();
+    }
+
+    // ===============================================================
+    // COLLECTION 12: /adminActivityLogs/{logId}
+    // ===============================================================
+    match /adminActivityLogs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && isAdmin();
+      allow list: if isSignedIn() && (existing().actorUid == request.auth.uid || isAuthorizedAdminEmail());
+      allow create: if isSignedIn() &&
+        isValidId(logId) &&
+        isValidAdminActivityLog(incoming()) &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+      allow update, delete: if false;
+    }
+  }
+}
